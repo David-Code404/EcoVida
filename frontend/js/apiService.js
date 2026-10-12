@@ -1,0 +1,425 @@
+// API Service - Cliente para llamadas HTTP
+
+let API_BASE = '';
+if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    API_BASE = 'http://localhost:3001/api';
+} else {
+    API_BASE = 'https://ecovida-backend.onrender.com/api';
+}
+
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function getImageUrl(ruta) {
+  // 1. Si no hay ruta o es el default fallido, asegurar el placeholder para evitar 404
+  if (!ruta || ruta.includes('producto-default.svg')) return 'https://placehold.co/400x400/e9ecef/6c757d?text=Sin+Imagen';
+  
+  if (ruta.startsWith('http')) return ruta;
+  
+  const partes = ruta.split('/');
+  const nombreArchivo = partes[partes.length - 1];
+
+  // 2. Si la imagen pertenece a la carpeta frontend/images/ o son datos de prueba (SVG)
+  if (ruta.includes('images/') || ruta.includes('producto-')) {
+    return `images/${nombreArchivo}`;
+  }
+
+  // 3. Imágenes nuevas subidas desde el Panel Admin van a la carpeta de tu servidor (Local o Render)
+  const baseUrl = API_BASE.replace('/api', '');
+  return `${baseUrl}/uploads/${nombreArchivo}`;
+}
+
+function renderProductRating(promedio, total) {
+  const totalResenas = Number(total) || 0;
+  if (totalResenas <= 0) return '';
+
+  const valor = Math.max(0, Math.min(5, Number(promedio) || 0));
+  const redondeado = Math.round(valor * 2) / 2;
+  let estrellas = '';
+
+  for (let i = 1; i <= 5; i++) {
+    if (redondeado >= i) {
+      estrellas += '<i class="bi bi-star-fill"></i>';
+    } else if (redondeado >= i - 0.5) {
+      estrellas += '<i class="bi bi-star-half"></i>';
+    } else {
+      estrellas += '<i class="bi bi-star"></i>';
+    }
+  }
+
+  const etiqueta = `${valor.toFixed(1)} de 5, ${totalResenas} reseña${totalResenas === 1 ? '' : 's'}`;
+  return `
+    <div class="eco-rating" aria-label="${etiqueta}">
+      <span class="eco-rating-stars" aria-hidden="true">${estrellas}</span>
+      <span class="eco-rating-count">(${totalResenas})</span>
+    </div>
+  `;
+}
+
+class APIService {
+  static getImageUrl = getImageUrl;
+
+  static getToken() {
+    return localStorage.getItem('token');
+  }
+
+  static setToken(token) {
+    localStorage.setItem('token', token);
+  }
+
+  static clearToken() {
+    localStorage.removeItem('token');
+  }
+
+  static getHeaders(includeAuth = true) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (includeAuth && this.getToken()) {
+      headers.Authorization = `Bearer ${this.getToken()}`;
+    }
+    return headers;
+  }
+
+  // AUTH
+  static async register(nombre, email, contrasena) {
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: 'POST',
+      headers: this.getHeaders(false),
+      body: JSON.stringify({ nombre, email, contrasena })
+    });
+    return res.json();
+  }
+
+  static async login(email, contrasena) {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: this.getHeaders(false),
+      body: JSON.stringify({ email, contrasena })
+    });
+    return res.json();
+  }
+
+  static async loginGoogle(idToken) {
+    const res = await fetch(`${API_BASE}/auth/google`, {
+      method: 'POST',
+      headers: this.getHeaders(false),
+      body: JSON.stringify({ idToken })
+    });
+    return res.json();
+  }
+
+  static logout() {
+    this.clearToken();
+  }
+
+  // PRODUCTOS
+  // [NUEVO] Soporte para paginación y filtros en la llamada a la API
+  static async obtenerProductos(page = 1, limit = 20, categoriaId = '', buscar = '', destacado = '') {
+    const params = new URLSearchParams();
+    if (page) params.append('page', page);
+    if (limit) params.append('limit', limit);
+    if (categoriaId) params.append('categoria', categoriaId);
+    if (buscar) params.append('buscar', buscar);
+    if (destacado !== '') params.append('destacado', destacado);
+    
+    const res = await fetch(`${API_BASE}/productos?${params.toString()}`, {
+      headers: this.getHeaders(false)
+    });
+    return res.json();
+  }
+
+  static async obtenerProductoPorId(id) {
+    const res = await fetch(`${API_BASE}/productos/${id}`, {
+      headers: this.getHeaders(false)
+    });
+    return res.json();
+  }
+
+  static async obtenerProductosPorCategoria(categoriaId) {
+    const res = await fetch(`${API_BASE}/productos/categoria/${categoriaId}`, {
+      headers: this.getHeaders(false)
+    });
+    return res.json();
+  }
+
+  static async buscarProductos(termino) {
+    const res = await fetch(`${API_BASE}/productos/buscar/${termino}`, {
+      headers: this.getHeaders(false)
+    });
+    return res.json();
+  }
+
+  // CATEGORÍAS
+  static async obtenerCategorias() {
+    const res = await fetch(`${API_BASE}/categorias`, {
+      headers: this.getHeaders(false)
+    });
+    return res.json();
+  }
+
+  static async obtenerCategoriaPorId(id) {
+    const res = await fetch(`${API_BASE}/categorias/${id}`, {
+      headers: this.getHeaders(false)
+    });
+    return res.json();
+  }
+
+  // CARRITO
+  static async obtenerCarrito() {
+    const res = await fetch(`${API_BASE}/carrito`, {
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  static async agregarAlCarrito(productoId, cantidad) {
+    const res = await fetch(`${API_BASE}/carrito`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ productoId, cantidad })
+    });
+    return res.json();
+  }
+
+  static async actualizarCarrito(productoId, cantidad) {
+    const res = await fetch(`${API_BASE}/carrito/${productoId}`, {
+      method: 'PUT',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ cantidad })
+    });
+    return res.json();
+  }
+
+  static async eliminarDelCarrito(productoId) {
+    const res = await fetch(`${API_BASE}/carrito/${productoId}`, {
+      method: 'DELETE',
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  static async vaciarCarrito() {
+    const res = await fetch(`${API_BASE}/carrito`, {
+      method: 'DELETE',
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  // ÓRDENES
+  static async crearOrden(direccionEnvio) {
+    const res = await fetch(`${API_BASE}/ordenes`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ direccionEnvio })
+    });
+    return res.json();
+  }
+
+  static async obtenerMisOrdenes() {
+    const res = await fetch(`${API_BASE}/ordenes`, {
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  static async obtenerOrdenPorId(id) {
+    const res = await fetch(`${API_BASE}/ordenes/${id}`, {
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  static async confirmarRecepcionOrden(id) {
+    const res = await fetch(`${API_BASE}/ordenes/${id}/confirmar-recepcion`, {
+      method: 'PUT',
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  static async descargarFactura(id) {
+    const token = this.getToken();
+    if (!token) { window.location.href = 'login.html'; return; }
+
+    // Descargar PDF directamente desde el backend (diseño premium generado con pdfkit)
+    const baseUrl = API_BASE.replace('/api', '');
+    const url = `${API_BASE}/ordenes/${id}/factura`;
+
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Error al descargar la factura');
+    }
+
+    // Convertir respuesta a blob y forzar descarga
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
+    a.href = blobUrl;
+    a.download = filenameMatch ? filenameMatch[1] : `F-${String(id).padStart(6, '0')}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  }
+
+  // RESEÑAS
+  static async obtenerResenasProducto(productoId) {
+    const res = await fetch(`${API_BASE}/resenas/producto/${productoId}`, {
+      headers: this.getHeaders(false)
+    });
+    return res.json();
+  }
+
+  static async crearResena(productoId, calificacion, comentario = '') {
+    const res = await fetch(`${API_BASE}/resenas`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ productoId, calificacion, comentario })
+    });
+    return res.json();
+  }
+
+  static async obtenerMisResenas() {
+    const res = await fetch(`${API_BASE}/resenas`, {
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  static async puedeResenarProducto(productoId) {
+    const res = await fetch(`${API_BASE}/resenas/puede-resenar/${productoId}`, {
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  static async obtenerTodasResenasAdmin() {
+    const res = await fetch(`${API_BASE}/resenas`, {
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  // USUARIO
+  static async obtenerPerfil() {
+    const res = await fetch(`${API_BASE}/users/perfil`, {
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  static async actualizarPerfil(datos) {
+    const res = await fetch(`${API_BASE}/users/perfil`, {
+      method: 'PUT',
+      headers: this.getHeaders(),
+      body: JSON.stringify(datos)
+    });
+    return res.json();
+  }
+
+  // NOTIFICACIONES
+  static async obtenerNotificaciones() {
+    const res = await fetch(`${API_BASE}/notificaciones`, {
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  static async obtenerNotificacionesNoLeidas() {
+    const res = await fetch(`${API_BASE}/notificaciones/no-leidas`, {
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  static async marcarNotificacionLeida(id) {
+    const res = await fetch(`${API_BASE}/notificaciones/${id}/leida`, {
+      method: 'PUT',
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  static async marcarTodasNotificacionesLeidas() {
+    const res = await fetch(`${API_BASE}/notificaciones/leer-todas`, {
+      method: 'PUT',
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  static async eliminarNotificacion(id) {
+    const res = await fetch(`${API_BASE}/notificaciones/${id}`, {
+      method: 'DELETE',
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  static async limpiarNotificaciones() {
+    const res = await fetch(`${API_BASE}/notificaciones`, {
+      method: 'DELETE',
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  // FAVORITOS
+  static async obtenerFavoritos() {
+    const res = await fetch(`${API_BASE}/favoritos`, {
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  static async obtenerFavoritosIds() {
+    const res = await fetch(`${API_BASE}/favoritos/ids`, {
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  static async agregarFavorito(productoId) {
+    const res = await fetch(`${API_BASE}/favoritos`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ productoId })
+    });
+    return res.json();
+  }
+
+  static async eliminarFavorito(productoId) {
+    const res = await fetch(`${API_BASE}/favoritos/${productoId}`, {
+      method: 'DELETE',
+      headers: this.getHeaders()
+    });
+    return res.json();
+  }
+
+  // CONTACTO
+  static async enviarContacto(datos) {
+    const res = await fetch(`${API_BASE}/contacto`, {
+      method: 'POST',
+      headers: this.getHeaders(false),
+      body: JSON.stringify(datos)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Error al enviar el mensaje');
+    }
+    return data;
+  }
+}

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mi perfil | EcoVida</title>
+  <meta name="description" content="Gestiona tu cuenta, pedidos y datos personales en EcoVida.">
+  <meta name="robots" content="noindex, nofollow">
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-FJ2FEMMR94"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-FJ2FEMMR94');
+  </script>
+  <!-- Search Console - activar cuando se verifique -->
+  <!-- <meta name="google-site-verification" content="PENDIENTE_CODIGO_VERIFICACION"/> -->
+  <!-- Meta Pixel - activar cuando se tenga el ID -->
+  <!--
+  <script>
+    fbq('init', 'PENDIENTE_PIXEL_ID');
+    fbq('track', 'PageView');
+  </script>
+  -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="CSS/style.css" rel="stylesheet">
+</head>
+<body class="eco-panel-page eco-panel-premium">
+  <div id="navbar-container"></div>
+  <script src="js/navbarLoader.js"></script>
+
+  <main class="container profile-shell">
+    <div class="row g-4 align-items-start">
+      <!-- Sidebar -->
+      <div class="col-xl-3 col-lg-4">
+        <aside class="profile-side-panel">
+          <div class="profile-header">
+            <div aria-hidden="true" class="profile-avatar">
+              <i class="bi bi-person"></i>
+            </div>
+            <h3 class="profile-name" id="userName">Usuario</h3>
+            <p class="profile-email" id="userEmail">email@example.com</p>
+          </div>
+        
+          <nav aria-label="Secciones del perfil" class="profile-sidebar">
+            <a class="nav-link tab-link profile-nav-link active" data-tab="perfil" href="#">
+              <i class="bi bi-person-check"></i> Mi Perfil
+            </a>
+            <a class="nav-link tab-link profile-nav-link" data-tab="ordenes" href="#">
+              <i class="bi bi-bag-check"></i> Mis Órdenes
+            </a>
+            <a class="nav-link tab-link profile-nav-link" data-tab="notificaciones" href="#">
+              <i class="bi bi-bell"></i> Notificaciones
+              <span class="badge bg-danger ms-auto" id="profileNotificationCount" style="display:none;">0</span>
+            </a>
+            <a class="nav-link tab-link profile-nav-link" data-tab="resenas" href="#">
+              <i class="bi bi-star"></i> Mis Reseñas
+            </a>
+            <a class="nav-link tab-link profile-nav-link" data-tab="favoritos" href="#">
+              <i class="bi bi-heart"></i> Favoritos
+            </a>
+          </nav>
+        </aside>
+      </div>
+
+      <!-- Content -->
+      <div class="col-xl-9 col-lg-8">
+        <!-- Pestaña: Perfil -->
+        <div class="tab-content" id="perfil-tab">
+          <div class="profile-card">
+            <h4 class="profile-card-title">Información Personal</h4>
+            <form id="profileForm">
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label class="profile-label" for="nombre">Nombre Completo</label>
+                  <input class="profile-input" id="nombre" required type="text" autocomplete="name">
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="profile-label" for="email">Email</label>
+                  <input class="profile-input" disabled id="email" type="email" autocomplete="email">
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="profile-label" for="telefono">Teléfono</label>
+                  <input class="profile-input" id="telefono" required type="tel" autocomplete="tel">
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="profile-label" for="ciudad">Ciudad</label>
+                  <input class="profile-input" id="ciudad" required type="text" autocomplete="address-level2">
+                </div>
+                <div class="col-12 mb-4">
+                  <label class="profile-label" for="direccion">Dirección</label>
+                  <textarea class="profile-input" id="direccion" required rows="3" autocomplete="street-address"></textarea>
+                </div>
+              </div>
+              <button class="btn-profile-save" type="submit">
+                Guardar Cambios
+              </button>
+            </form>
+            <div class="alert alert-success mt-3" id="successMsg" style="display:none;" role="alert"></div>
+            <div class="alert alert-danger mt-3" id="errorMsg" style="display:none;" role="alert"></div>
+          </div>
+        </div>
+
+        <!-- Pestaña: Órdenes -->
+        <div class="tab-content" id="ordenes-tab" style="display:none;">
+          <div class="profile-card">
+            <div class="profile-section-head profile-orders-head d-flex flex-column flex-md-row justify-content-between gap-2 mb-3">
+              <div>
+                <h4 class="profile-card-title mb-1">Mis Órdenes</h4>
+                <p class="text-muted small mb-0">Sigue el estado de tus compras y confirma cuando recibas tu pedido.</p>
+              </div>
+              <a class="btn btn-outline-success btn-sm align-self-md-start profile-shop-btn" href="productos.html">
+                <i class="bi bi-bag-heart"></i> Seguir comprando
+              </a>
+            </div>
+            <div class="client-order-summary" id="ordenesSummary"></div>
+            <div id="ordenesList"></div>
+          </div>
+        </div>
+
+        <!-- Pestaña: Notificaciones -->
+        <div class="tab-content" id="notificaciones-tab" style="display:none;">
+          <div class="profile-card">
+            <div class="profile-section-head">
+              <h4 class="profile-card-title mb-0">Notificaciones</h4>
+              <div class="profile-head-actions">
+                <button class="btn btn-sm btn-outline-success" id="markAllNotificationsBtn" type="button">
+                  <i class="bi bi-check2-circle"></i> Marcar leídas
+                </button>
+                <button class="btn btn-sm btn-outline-danger" id="clearNotificationsBtn" type="button">
+                  <i class="bi bi-trash3"></i> Limpiar
+                </button>
+              </div>
+            </div>
+            <div id="notificacionesList"></div>
+          </div>
+        </div>
+
+        <!-- Pestaña: Reseñas -->
+        <div class="tab-content" id="resenas-tab" style="display:none;">
+          <div class="profile-card">
+            <h4 class="profile-card-title">Mis Reseñas</h4>
+            <div id="resenasList"></div>
+          </div>
+        </div>
+
+        <!-- Pestaña: Favoritos -->
+        <div class="tab-content" id="favoritos-tab" style="display:none;">
+          <div class="profile-card">
+            <h4 class="profile-card-title">Mis Favoritos</h4>
+            <div id="favoritosList"></div>
+            <div class="text-center py-5" id="favoritosEmpty" style="display:none;">
+              <i class="bi bi-heart" style="font-size:3rem;color:#ddd;" aria-hidden="true"></i>
+              <p class="text-muted mt-3 mb-1 fw-bold">Aún no tienes favoritos</p>
+              <p class="text-muted small">Guarda productos con el corazón y aparecerán aquí.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer mt-5">
+    <div class="container">
+      <div class="row g-5">
+        <div class="col-lg-4 col-md-6">
+          <div class="mb-3">
+            <img alt="EcoVida logotipo" class="footer-logo" src="images/logo.png" width="72" height="72" loading="lazy" decoding="async">
+          </div>
+          <p class="footer-text mb-3">Tu tienda confiable de productos naturales y orgánicos para una vida más saludable.</p>
+          <div class="social-links">
+            <a aria-label="Visitar Facebook de EcoVida" class="social-icon social-facebook" href="https://facebook.com/ecovidanaturalbo" title="Facebook"><i class="bi bi-facebook"></i></a>
+            <a aria-label="Visitar Instagram de EcoVida" class="social-icon social-instagram" href="https://www.instagram.com/ecovida.bo" title="Instagram"><i class="bi bi-instagram"></i></a>
+            <a aria-label="Visitar YouTube de EcoVida" class="social-icon social-youtube" href="https://www.youtube.com/@ecovidanaturalbo" title="YouTube"><i class="bi bi-youtube"></i></a>
+            <a aria-label="Visitar TikTok de EcoVida" class="social-icon social-tiktok" href="https://tiktok.com/@ecovida.naturalb" title="TikTok"><i class="bi bi-tiktok"></i></a>
+          </div>
+        </div>
+        <div class="col-lg-2 col-md-6">
+          <h6 class="footer-title">Tienda</h6>
+          <ul class="list-unstyled footer-links">
+            <li><a href="productos.html"><i class="bi bi-chevron-right"></i> Productos</a></li>
+            <li><a href="categorias.html"><i class="bi bi-chevron-right"></i> Categorías</a></li>
+            <li><a href="carrito.html"><i class="bi bi-chevron-right"></i> Mi Carrito</a></li>
+          </ul>
+        </div>
+        <div class="col-lg-3 col-md-6">
+          <h6 class="footer-title">Información</h6>
+          <ul class="list-unstyled footer-links">
+            <li><a href="sobre-nosotros.html"><i class="bi bi-chevron-right"></i> Sobre Nosotros</a></li>
+            <li><a href="contacto.html"><i class="bi bi-chevron-right"></i> Contacto</a></li>
+            <li><a href="privacidad.html"><i class="bi bi-chevron-right"></i> Privacidad</a></li>
+            <li><a href="terminos.html"><i class="bi bi-chevron-right"></i> Términos</a></li>
+          </ul>
+          <div class="footer-payments">
+            <span class="footer-payment-pill is-paypal"><i class="bi bi-paypal"></i> PayPal</span>
+            <span class="footer-payment-pill is-transfer"><i class="bi bi-bank"></i> Transferencia</span>
+            <span class="footer-payment-pill is-cod"><i class="bi bi-box-seam"></i> Contra entrega</span>
+          </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+          <h6 class="footer-title">Contacto</h6>
+          <ul class="list-unstyled footer-contact">
+            <li><i class="bi bi-envelope"></i> ecovida.natural1@gmail.com</li>
+            <li><i class="bi bi-telephone"></i> +591 75442968</li>
+            <li><i class="bi bi-geo-alt"></i> Sucre, Bolivia</li>
+          </ul>
+        </div>
+      </div>
+      <hr class="footer-divider">
+      <div class="row">
+        <div class="col-12 text-center">
+          <p class="footer-copyright mb-0">&copy; 2025 EcoVida. Todos los derechos reservados.</p>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/bootstrap.bundle.min.js"></script>
+  <script src="js/apiService.js"></script>
+  <script src="js/notif.js"></script>
+  <script src="js/header.js"></script>
+  <script src="js/profile.js"></script>
+  <!--Start of Tawk.to Script-->
+  <script type="text/javascript">
+  var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
+  (function(){
+    var s1=document.createElement("script"),
+        s0=document.getElementsByTagName("script")[0];
+    s1.async=true;
+    s1.src='https://embed.tawk.to/6a053c3d1ba64a1c35e55473/1joi76kg7';
+    s1.charset='UTF-8';
+    s1.setAttribute('crossorigin','*');
+    s0.parentNode.insertBefore(s1,s0);
+  })();
+  </script>
+  <!--End of Tawk.to Script-->
+  <script src="js/socialFloat.js"></script>
+</body>
+</html>

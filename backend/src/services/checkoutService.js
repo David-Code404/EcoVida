@@ -1,0 +1,178 @@
+const mercadopago = require('mercadopago');
+const OrdenesRepository = require('../repositories/ordenesRepository');
+const CarritoRepository = require('../repositories/carritoRepository');
+const ProductosRepository = require('../repositories/productosRepository');
+const UserRepository = require('../repositories/userRepository');
+const NotificacionesRepository = require('../repositories/notificacionesRepository');
+const { crearErrorPerfilIncompleto } = require('../utils/perfilValidation');
+
+// Configurar MercadoPago (será configurado con token en env)
+const MERCADOPAGO_TOKEN = process.env.MERCADOPAGO_TOKEN || null;
+
+class CheckoutService {
+  static configurarMercadoPago(token) {
+    if (token) {
+      mercadopago.configure({
+        access_token: token
+      });
+    }
+  }
+
+  static async crearOrdenDesdeCarrito(usuarioId, direccionEnvio) {
+    const usuario = await UserRepository.obtenerPorId(usuarioId);
+    const errorPerfil = crearErrorPerfilIncompleto(usuario);
+    if (errorPerfil) throw errorPerfil;
+
+    // Obtener carrito del usuario
+    const items = await CarritoRepository.obtenerCarritoUsuario(usuarioId);
+
+    if (!items || items.length === 0) {
+      throw new Error('El carrito está vacío');
+    }
+
+    // Validar stock disponible y preparar productos con imagen
+    const productos = [];
+    for (const item of items) {
+      const producto = await ProductosRepository.obtenerPorId(item.productoId);
+      if (!producto || producto.stock < item.cantidad) {
+        throw new Error(`Stock insuficiente para ${item.nombre}`);
+      }
+      productos.push({
+        productoId: item.productoId,
+        nombre: item.nombre || producto.nombre,
+        cantidad: item.cantidad,
+        precio: item.precioUnitario ?? producto.precio,
+        imagen: producto.imagen || item.imagen || ''
+      });
+    }
+
+    // Calcular total
+    const total = items.reduce((sum, item) => sum + item.subtotal, 0);
+
+    // Crear orden
+    const Orden = require('../models/Orden');
+
+    const orden = new Orden(usuarioId, productos, total, direccionEnvio);
+    const ordenId = await OrdenesRepository.crearOrden(orden);
+
+    // Descontar stock de forma condicional para evitar cantidades negativas.
+    const descontados = [];
+    try {
+      for (const item of items) {
+        const descontado = await ProductosRepository.descontarStock(item.productoId, item.cantidad);
+        if (!descontado) {
+          throw new Error(`Stock insuficiente para ${item.nombre}`);
+        }
+        descontados.push(item);
+      }
+    } catch (error) {
+      for (const item of descontados) {
+        await ProductosRepository.actualizarStock(item.productoId, item.cantidad);
+      }
+      await OrdenesRepository.actualizarEstado(ordenId, 'cancelada');
+      throw error;
+    }
+
+    await OrdenesRepository.registrarHistorial({
+      ordenId,
+      estadoNuevo: 'pendiente',
+      actorUsuarioId: usuarioId,
+      actorRol: 'cliente',
+      nota: 'Orden creada por el cliente'
+    });
+    await NotificacionesRepository.crear({
+      usuarioId,
+      ordenId,
+      tipo: 'orden_pendiente',
+      mensaje: `Orden #${ordenId}: recibimos tu pedido y está pendiente de confirmación.`,
+      enlace: 'profile.html?tab=ordenes'
+    });
+
+    // Vaciar carrito
+    await CarritoRepository.vaciarCarrito(usuarioId);
+
+    return {
+      ordenId,
+      total,
+      productos
+    };
+  }
+
+  static async crearPreferenciaMP(orden) {
+    if (!MERCADOPAGO_TOKEN) {
+      throw new Error('MercadoPago no configurado');
+    }
+
+    const preference = {
+      items: orden.productos.map(prod => ({
+        id: prod.productoId.toString(),
+        title: prod.nombre,
+        quantity: prod.cantidad,
+        unit_price: prod.precio
+      })),
+      payer: {
+        email: 'cliente@ecovida.com'
+      },
+      back_urls: {
+        success: '/frontend/orden-confirmacion.html',
+        failure: '/frontend/carrito.html',
+        pending: '/frontend/carrito.html'
+      },
+      auto_return: 'approved',
+      external_reference: `orden-${orden.ordenId}`
+    };
+
+    try {
+      const response = await mercadopago.preferences.create(preference);
+      return response.body.init_point;
+    } catch (error) {
+      throw new Error('Error al crear preferencia en MercadoPago: ' + error.message);
+    }
+  }
+
+  static async confirmarPago(ordenId, detallesPago) {
+    // Actualizar estado de orden
+    await OrdenesRepository.actualizarEstado(ordenId, 'confirmada');
+
+    if (detallesPago.numeroSeguimiento) {
+      await OrdenesRepository.actualizarSeguimiento(ordenId, detallesPago.numeroSeguimiento);
+    }
+
+    return {
+      exito: true,
+      mensaje: 'Pago confirmado',
+      ordenId
+    };
+  }
+
+  static async procesarPago(usuarioId, direccionEnvio) {
+    try {
+      const ordenData = await this.crearOrdenDesdeCarrito(usuarioId, direccionEnvio);
+      const orden = await OrdenesRepository.obtenerPorId(ordenData.ordenId);
+      // Obtener usuario con todos los datos del perfil
+      const usuarioRaw = await UserRepository.obtenerPorId(orden.usuarioId);
+      const usuario = {
+        nombre:    usuarioRaw.nombre    || 'Cliente General',
+        email:     usuarioRaw.email     || 'N/A',
+        telefono:  usuarioRaw.telefono  || 'N/A',
+        direccion: usuarioRaw.direccion || '',
+        ciudad:    usuarioRaw.ciudad    || ''
+      };
+      // Generar PDF de factura
+      const { generarFacturaPDF } = require('./facturaService');
+      const logoPath = require('path').join(__dirname, '../../../frontend/images/logo.png');
+      await generarFacturaPDF({
+        orden: { ...orden, id: orden.id, fecha: orden.fechaCreacion },
+        usuario,
+        productos: orden.productos,
+        metodoPago: orden.metodoPago,
+        logoPath
+      });
+      return ordenData;
+    } catch (error) {
+      throw error;
+    }
+  }
+}
+
+module.exports = CheckoutService;
